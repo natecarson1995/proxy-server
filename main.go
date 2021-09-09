@@ -30,6 +30,26 @@ func GetOriginalHostReader(method string, path string) (io.ReadCloser, error) {
 	return proxyResponse.Body, nil
 }
 
+func GeneralProxy(ctx *gin.Context, path string) {
+	// We hash the path here, so that each unique requested path leads to a unique local path
+	// Without having to deal with directories or escaping characters
+	req := ctx.Request
+	hostPath := ctx.Params.ByName("path")
+
+	// Here we get the reader for the original host's file
+	originalHostPath := path + hostPath
+	hostFileReader, err := GetOriginalHostReader(req.Method, originalHostPath)
+	if err != nil {
+		log.Fatalf("Error getting original host file: %s", err)
+	}
+	defer hostFileReader.Close()
+
+	// Do the streaming of the file to the client
+	ctx.Stream(func(w io.Writer) bool {
+		_, err := io.Copy(w, hostFileReader)
+		return err != nil
+	})
+}
 func main() {
 	// This is an initial superficial check of the original host url we read files from
 	originalHost, err := url.Parse(os.Getenv("ORIGINAL_HOST"))
@@ -78,6 +98,16 @@ func main() {
 			_, err := io.Copy(w, fileReader)
 			return err != nil
 		})
+	})
+
+	router.POST("/*path", func(c *gin.Context) {
+		GeneralProxy(c, originalHost.String())
+	})
+	router.PUT("/*path", func(c *gin.Context) {
+		GeneralProxy(c, originalHost.String())
+	})
+	router.DELETE("/*path", func(c *gin.Context) {
+		GeneralProxy(c, originalHost.String())
 	})
 
 	router.Run()

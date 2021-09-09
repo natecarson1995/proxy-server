@@ -1,0 +1,2 @@
+This is a simple server made in Gin in Golang that proxies GET requests for another server, and caches their responses.
+Headers are ignored, and requests other than GET requests are not cached. Body data from POST requests is not forwarded.
